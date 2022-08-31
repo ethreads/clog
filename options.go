@@ -68,6 +68,15 @@ func (o *options) WithTimestamp() *options {
 	return o
 }
 
+// WithPrefix 添加全局prefix string
+func (o *options) WithPrefix(key string, val interface{}) *options {
+	if len(o.prefix) > 0 {
+		o.prefix = append(o.prefix, ',')
+	}
+	o.prefix = trs.AppendInterface(append(trs.AppendString(o.prefix, key), ':'), val)
+	return o
+}
+
 // Default 生成全局实例 调用clog.Log*前需初始化全局实例
 func (o *options) Default() {
 	if clog != nil {
