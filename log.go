@@ -5,7 +5,22 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
 )
+
+var randomCfg sync.Map
+
+func SetRandomCfg(cfg map[string]struct{}) {
+	for k := range cfg {
+		randomCfg.Store(k, struct{}{})
+	}
+	randomCfg.Range(func(key, value interface{}) bool {
+		if _, ok := cfg[key.(string)]; !ok {
+			randomCfg.Delete(key)
+		}
+		return true
+	})
+}
 
 func (l Level) String() string {
 	switch l {
@@ -87,7 +102,7 @@ func (l *Logger) AppendStrPrefix(key string, val interface{}) {
 }
 
 // GetLevel 返回当前实例的日志等级.
-func (l Logger) GetLevel() Level {
+func (l *Logger) GetLevel() Level {
 	return l.level
 }
 
@@ -215,7 +230,7 @@ func (l *Logger) Printf(format string, v ...interface{}) {
 }
 
 // Write 实现 io.Writer 接口.
-func (l Logger) Write(p []byte) (n int, err error) {
+func (l *Logger) Write(p []byte) (n int, err error) {
 	n = len(p)
 	if n > 0 && p[n-1] == '\n' {
 		p = p[:n-1]
@@ -244,16 +259,53 @@ func (l *Logger) newEvent(level Level, seed int64, done func(string)) *Event {
 }
 
 // Should 如果log等级小于实例等级或小于全局等级,则返回True.
-func (l Logger) Should(lvl Level, seed int64) bool {
-
+func (l *Logger) Should(lvl Level, seed int64) bool {
 	if lvl < l.level || lvl < GlobalLevel() {
-		if lvl == RandomLevel && abs(seed)%RandomLine < int64(l.random) {
-			return true
+		if lvl == RandomLevel {
+			if l.dynamicShould(seed) {
+				return true
+			}
+			if abs(seed)%RandomLine < int64(l.random) {
+				return true
+			}
 		}
 		return false
 	}
-	if (lvl == l.level || lvl == GlobalLevel()) && lvl == RandomLevel && abs(seed)%RandomLine < int64(l.random) {
-		return true
+	if (lvl == l.level || lvl == GlobalLevel()) && lvl == RandomLevel {
+		if l.dynamicShould(seed) {
+			return true
+		}
+		if abs(seed)%RandomLine < int64(l.random) {
+			return true
+		}
 	}
 	return true
+}
+
+func (l *Logger) dynamicShould(seed int64) bool {
+	w := getCtx(seed)
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.ctx.ExchangeId > 0 && l.check(w.ctx.ExchangeId, -1) {
+		return true
+	}
+	for dspId := range w.ctx.DspIds {
+		if l.check(-1, dspId) {
+			return true
+		}
+	}
+	if w.ctx.ExchangeId > 0 {
+		for dspId := range w.ctx.DspIds {
+			if l.check(w.ctx.ExchangeId, dspId) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (l *Logger) check(exchangeId, dspId int) bool {
+	key := fmt.Sprintf("%d_%d", exchangeId, dspId)
+	_, ok := randomCfg.Load(key)
+	return ok
 }
