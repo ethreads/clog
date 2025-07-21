@@ -26,6 +26,7 @@ func writeLogFile() {
 	clog.Set.TimeFormat(time.RFC3339Nano)
 	clog.Set.FiledName().TimestampFieldName("tm")
 	clog.SetGlobalLevel(clog.Level(2))
+	clog.SetRandomCfg(map[string]struct{}{"10_200": {}, "20_-1": {}, "-1_400": {}})
 	clog.Info().Msg("receive req data")
 	log := clog.CopyDefault()
 	log.ResetStrPrefix("host", "default")
@@ -37,8 +38,10 @@ func writeLogFile() {
 		gid := i
 		go func() {
 			for j := -1000; j < 1000; j++ {
+				clog.SetCtx(int64(j), gid, j)
 				log.Random(int64(j)).Int("goroutine id", gid).Int("idx", j).Str("msg", "foo").Msg("bar")
 				log.Random(int64(j)).Int("goroutine id", gid).Int("idx-1", j).Str("msg", "foo").Msg("bar")
+				clog.ClearCtx(int64(j))
 			}
 			wg.Done()
 		}()
