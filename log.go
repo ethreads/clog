@@ -91,6 +91,11 @@ func (l Logger) GetLevel() Level {
 	return l.level
 }
 
+// GetRandom 返回当前实例的日志随机比例.
+func (l Logger) GetRandom() int {
+	return l.random
+}
+
 // Hook 向事件添加hook.
 func (l *Logger) Hook(h Hook) *Logger {
 	l.hooks = append(l.hooks, h)
